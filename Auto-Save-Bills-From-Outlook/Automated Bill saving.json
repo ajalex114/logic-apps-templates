@@ -1,0 +1,475 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "logicAppName": {
+            "type": "String",
+            "metadata": {
+                "description": "Name of the logic app."
+            }
+        },
+        "logicAppLocation": {
+            "defaultValue": "[resourceGroup().location]",
+            "allowedValues": [
+                "eastasia",
+                "southeastasia",
+                "centralus",
+                "eastus",
+                "eastus2",
+                "westus",
+                "northcentralus",
+                "southcentralus",
+                "northeurope",
+                "westeurope",
+                "japanwest",
+                "japaneast",
+                "brazilsouth",
+                "australiaeast",
+                "australiasoutheast",
+                "southindia",
+                "centralindia",
+                "westindia",
+                "canadacentral",
+                "canadaeast",
+                "uaecentral",
+                "westcentralus",
+                "westus2",
+                "[resourceGroup().location]"
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "Location of the logic app."
+            }
+        },
+        "outlook_Connection_Name": {
+            "defaultValue": "outlook",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the connection."
+            }
+        },
+        "onedrive_Connection_Name": {
+            "defaultValue": "onedrive",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the connection."
+            }
+        },
+        "flowpush_Connection_Name": {
+            "defaultValue": "flowpush",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the connection."
+            }
+        }
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('logicAppName')]",
+            "location": "[parameters('logicAppLocation')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', parameters('outlook_Connection_Name'))]",
+                "[resourceId('Microsoft.Web/connections', parameters('onedrive_Connection_Name'))]",
+                "[resourceId('Microsoft.Web/connections', parameters('flowpush_Connection_Name'))]"
+            ],
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "$authentication": {
+                            "defaultValue": {},
+                            "type": "SecureObject"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_new_email_arrives": {
+                            "splitOn": "@triggerBody()?['value']",
+                            "metadata": {
+                                "flowSystemMetadata": {
+                                    "swaggerOperationId": "OnNewEmailV2"
+                                }
+                            },
+                            "type": "ApiConnectionNotification",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['outlook']['connectionId']"
+                                    }
+                                },
+                                "fetch": {
+                                    "queries": {
+                                        "folderPath": "Inbox",
+                                        "from": "ebill@airtel.com",
+                                        "importance": "Any",
+                                        "fetchOnlyWithAttachment": true,
+                                        "includeAttachments": true,
+                                        "subjectFilter": "Your Airtel Mobile Bill for"
+                                    },
+                                    "pathTemplate": {
+                                        "template": "/v2/Mail/OnNewEmail"
+                                    },
+                                    "method": "get"
+                                },
+                                "subscribe": {
+                                    "queries": {
+                                        "folderPath": "Inbox",
+                                        "importance": "Any",
+                                        "fetchOnlyWithAttachment": true
+                                    },
+                                    "body": {
+                                        "NotificationUrl": "@{listCallbackUrl()}"
+                                    },
+                                    "pathTemplate": {
+                                        "template": "/MailSubscriptionPoke/$subscriptions"
+                                    },
+                                    "method": "post"
+                                },
+                                "authentication": "@parameters('$authentication')"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Apply_to_each": {
+                            "foreach": "@triggerBody()?['Attachments']",
+                            "actions": {
+                                "Condition": {
+                                    "actions": {
+                                        "Get_attachment": {
+                                            "runAfter": {},
+                                            "metadata": {
+                                                "flowSystemMetadata": {
+                                                    "swaggerOperationId": "GetAttachment"
+                                                }
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['outlook']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "get",
+                                                "path": "/Mail/@{encodeURIComponent(triggerBody()?['Id'])}/Attachments/@{encodeURIComponent(items('Apply_to_each')?['Id'])}",
+                                                "authentication": "@parameters('$authentication')"
+                                            }
+                                        },
+                                        "Create_file": {
+                                            "runAfter": {
+                                                "Get_attachment": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "metadata": {
+                                                "flowSystemMetadata": {
+                                                    "swaggerOperationId": "CreateFile"
+                                                }
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['onedrive']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "body": "@body('Get_attachment')",
+                                                "path": "/datasets/default/files",
+                                                "queries": {
+                                                    "folderPath": "@variables('folderPath')",
+                                                    "name": "@variables('fileName')"
+                                                },
+                                                "authentication": "@parameters('$authentication')"
+                                            },
+                                            "description": "File is kept in the corresponding year and the file name is kept as previous month",
+                                            "runtimeConfiguration": {
+                                                "contentTransfer": {
+                                                    "transferMode": "Chunked"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "expression": {
+                                        "endsWith": [
+                                            "@items('Apply_to_each')?['Name']",
+                                            ".pdf"
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_folder_path": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_year_variable": {
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "year",
+                                        "type": "String",
+                                        "value": "@{trim(last(outputs('Split_Date')))}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_file_name_variable": {
+                            "runAfter": {
+                                "Initialize_year_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "fileName",
+                                        "type": "String",
+                                        "value": "@{body('Convert_time_zone')}.pdf"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_folder_path": {
+                            "runAfter": {
+                                "Initialize_file_name_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "folderPath",
+                                        "type": "String",
+                                        "value": "/Documents/Bills/@{variables('name')}/@{variables('year')}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable": {
+                            "runAfter": {
+                                "Split_Date": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "name",
+                                        "type": "String",
+                                        "value": "Airtel Mobile"
+                                    }
+                                ]
+                            }
+                        },
+                        "Split_Date": {
+                            "runAfter": {
+                                "Convert_time_zone": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@split(body('Convert_time_zone'), ' ')"
+                        },
+                        "Convert_time_zone": {
+                            "runAfter": {},
+                            "type": "Expression",
+                            "kind": "ConvertTimeZone",
+                            "inputs": {
+                                "baseTime": "@triggerBody()?['DateTimeReceived']",
+                                "formatString": "y",
+                                "sourceTimeZone": "UTC",
+                                "destinationTimeZone": "India Standard Time"
+                            }
+                        },
+                        "Mark_as_read": {
+                            "runAfter": {
+                                "Apply_to_each": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "metadata": {
+                                "flowSystemMetadata": {
+                                    "swaggerOperationId": "MarkAsRead"
+                                }
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['outlook']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Mail/MarkAsRead/@{encodeURIComponent(triggerBody()?['Id'])}",
+                                "authentication": "@parameters('$authentication')"
+                            }
+                        },
+                        "Move_email": {
+                            "runAfter": {
+                                "Mark_as_read": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "metadata": {
+                                "Id::AQMkADAwATM0MDAAMS1iMWIxLTAxZTUtMDACLTAwCgAuAAADVDYbZGJhXkWbFCOhmU-d0AEAn3MIm9yFk0WtgxewsADHOMYAAAEB5pYAAAA=": "Automagic",
+                                "flowSystemMetadata": {
+                                    "swaggerOperationId": "Move"
+                                }
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['outlook']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Mail/Move/@{encodeURIComponent(triggerBody()?['Id'])}",
+                                "queries": {
+                                    "folderPath": "Id::<<folderPathId>>"
+                                },
+                                "authentication": "@parameters('$authentication')"
+                            }
+                        },
+                        "Send_me_a_mobile_notification": {
+                            "runAfter": {
+                                "Move_email": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "metadata": {
+                                "flowSystemMetadata": {
+                                    "swaggerOperationId": "SendNotification"
+                                }
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['flowpush']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": {
+                                    "notificationText": "Airtel Bill: @{variables('fileName')} Saved",
+                                    "notificationLink": {
+                                        "uri": "@variables('folderPath')"
+                                    }
+                                },
+                                "path": "/sendNotification",
+                                "authentication": "@parameters('$authentication')"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "outlook": {
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'outlook')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('outlook_Connection_Name'))]",
+                                "connectionName": "[parameters('outlook_Connection_Name')]"
+                            },
+                            "onedrive": {
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'onedrive')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('onedrive_Connection_Name'))]",
+                                "connectionName": "[parameters('onedrive_Connection_Name')]"
+                            },
+                            "flowpush": {
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'flowpush')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('flowpush_Connection_Name'))]",
+                                "connectionName": "[parameters('flowpush_Connection_Name')]"
+                            }
+                        }
+                    }
+                },
+                "runtimeConfiguration": {
+                    "lifetime": {
+                        "unit": "Day",
+                        "count": 30
+                    },
+                    "collections": {
+                        "maximumItemCount": 5000
+                    },
+                    "performanceProfile": {
+                        "throttles": {
+                            "mode": "Low"
+                        }
+                    },
+                    "retryPolicy": {
+                        "type": "Exponential",
+                        "interval": "PT5M",
+                        "count": 2,
+                        "minimumInterval": "PT5M",
+                        "maximumInterval": "PT1H"
+                    },
+                    "usageConfiguration": {
+                        "name": "USER-1234567891234567"
+                    }
+                },
+                "integrationAccount": {
+                    "name": "12345678945612345678945612345678-1234567891234567-westus",
+                    "id": "subscriptions/24fa6447-0d7f-439d-9ee6-3b1984fec8b6/resourceGroups/12345678945612345678945612345678-1234567891234567/providers/Microsoft.Logic/integrationAccounts/12345678945612345678945612345678-1234567891234567-westus",
+                    "type": "Microsoft.Logic/integrationAccounts"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('outlook_Connection_Name')]",
+            "location": "[parameters('logicAppLocation')]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'outlook')]"
+                },
+                "displayName": "[parameters('outlook_Connection_Name')]"
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('onedrive_Connection_Name')]",
+            "location": "[parameters('logicAppLocation')]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'onedrive')]"
+                },
+                "displayName": "[parameters('onedrive_Connection_Name')]"
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('flowpush_Connection_Name')]",
+            "location": "[parameters('logicAppLocation')]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'flowpush')]"
+                },
+                "displayName": "[parameters('flowpush_Connection_Name')]"
+            }
+        }
+    ]
+}
