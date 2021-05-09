@@ -11,6 +11,8 @@ The bill is then saved to a configured location in Onedrive.
 
 A notification is sent to any mobile which has flow installed and connected to this Microsoft account
 
+_PS: Please not that Microsoft Flow does not support saving of attachments from gmail as of the writing of this post._
+
 ## Outcome
 The attachment file is saved to the configured location in the below format:  
 `<<configured location>>/<<year>>/<<month>>.pdf`
