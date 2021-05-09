@@ -9,6 +9,8 @@ The provided template extracts the attachment when a new email comes in Outlook.
 
 The bill is then saved to a configured location in Onedrive.
 
+A notification is sent to any mobile which has flow installed and connected to this Microsoft account
+
 ## Outcome
 The attachment file is saved to the configured location in the below format:  
 `<<configured location>>/<<year>>/<<month>>.pdf`
