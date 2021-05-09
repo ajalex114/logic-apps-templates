@@ -1,0 +1,878 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "logicAppName": {
+            "type": "String",
+            "metadata": {
+                "description": "Name of the logic app."
+            }
+        },
+        "logicAppLocation": {
+            "defaultValue": "[resourceGroup().location]",
+            "allowedValues": [
+                "eastasia",
+                "southeastasia",
+                "centralus",
+                "eastus",
+                "eastus2",
+                "westus",
+                "northcentralus",
+                "southcentralus",
+                "northeurope",
+                "westeurope",
+                "japanwest",
+                "japaneast",
+                "brazilsouth",
+                "australiaeast",
+                "australiasoutheast",
+                "southindia",
+                "centralindia",
+                "westindia",
+                "canadacentral",
+                "canadaeast",
+                "uaecentral",
+                "westcentralus",
+                "westus2",
+                "[resourceGroup().location]"
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "Location of the logic app."
+            }
+        },
+        "cognitiveservicescustomvision_Connection_Name": {
+            "defaultValue": "cognitiveservicescustomvision",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the connection."
+            }
+        },
+        "onedrive_Connection_Name": {
+            "defaultValue": "onedrive",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the connection."
+            }
+        },
+        "outlook_Connection_Name": {
+            "defaultValue": "outlook",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the connection."
+            }
+        }
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('logicAppName')]",
+            "location": "[parameters('logicAppLocation')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', parameters('cognitiveservicescustomvision_Connection_Name'))]",
+                "[resourceId('Microsoft.Web/connections', parameters('onedrive_Connection_Name'))]",
+                "[resourceId('Microsoft.Web/connections', parameters('outlook_Connection_Name'))]"
+            ],
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "$authentication": {
+                            "defaultValue": {},
+                            "type": "SecureObject"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_file_is_created": {
+                            "recurrence": {
+                                "interval": 15,
+                                "frequency": "Minute"
+                            },
+                            "metadata": {
+                                "1234567894561234!20139": "/Pictures/Camera Roll",
+                                "flowSystemMetadata": {
+                                    "swaggerOperationId": "OnNewFile"
+                                },
+                                "1234567894561234!230245": "/Temp"
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['onedrive']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/datasets/default/triggers/onnewfile",
+                                "queries": {
+                                    "folderId": "1234567894561234!20139",
+                                    "inferContentType": true
+                                },
+                                "authentication": "@parameters('$authentication')"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Initialize_Prediction_Tag": {
+                            "runAfter": {
+                                "Initialize_File_Content": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "predictionTag",
+                                        "type": "String"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Prediction_Score": {
+                            "runAfter": {
+                                "Initialize_Prediction_Tag": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "predictionScore",
+                                        "type": "Float",
+                                        "value": 0
+                                    }
+                                ]
+                            }
+                        },
+                        "Convert_time_zone": {
+                            "runAfter": {
+                                "Compose_5": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Expression",
+                            "kind": "ConvertTimeZone",
+                            "inputs": {
+                                "baseTime": "@{utcNow()}",
+                                "formatString": "D",
+                                "sourceTimeZone": "UTC",
+                                "destinationTimeZone": "India Standard Time"
+                            }
+                        },
+                        "Initialize_File_Name": {
+                            "runAfter": {
+                                "Initialize_Prediction_Score": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "fileName",
+                                        "type": "String",
+                                        "value": "@{body('Month')}.csv"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_File_Path": {
+                            "runAfter": {
+                                "Initialize_File_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "filePath",
+                                        "type": "String",
+                                        "value": "/House%20Management/Milk/Availability%20Data/@{body('Year')}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Month": {
+                            "runAfter": {
+                                "Convert_time_zone": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Expression",
+                            "kind": "ConvertTimeZone",
+                            "inputs": {
+                                "baseTime": "@{utcNow()}",
+                                "formatString": "y",
+                                "sourceTimeZone": "UTC",
+                                "destinationTimeZone": "India Standard Time"
+                            }
+                        },
+                        "Year": {
+                            "runAfter": {
+                                "Month": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Expression",
+                            "kind": "ConvertTimeZone",
+                            "inputs": {
+                                "baseTime": "@{utcNow()}",
+                                "formatString": "yyyy",
+                                "sourceTimeZone": "UTC",
+                                "destinationTimeZone": "India Standard Time"
+                            }
+                        },
+                        "Initialize_Is_Milk_Present": {
+                            "runAfter": {
+                                "Initialize_File_Path": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "isMilkPresent",
+                                        "type": "Boolean",
+                                        "value": "@false"
+                                    }
+                                ]
+                            }
+                        },
+                        "File_Content_To_Add": {
+                            "runAfter": {
+                                "Initialize_Is_Milk_Present": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "filContentToAdd",
+                                        "type": "String",
+                                        "value": "@{body('Convert_time_zone')}, true, ✔"
+                                    }
+                                ]
+                            }
+                        },
+                        "Should_Proceed_Check": {
+                            "actions": {
+                                "File_Name_Compose": {
+                                    "runAfter": {},
+                                    "type": "Compose",
+                                    "inputs": "@base64ToString(triggerOutputs()['headers']['x-ms-file-name-encoded'])"
+                                },
+                                "Predict_tags_from_image": {
+                                    "runAfter": {
+                                        "File_Name_Compose": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "metadata": {
+                                        "flowSystemMetadata": {
+                                            "swaggerOperationId": "PredictImage"
+                                        }
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['cognitiveservicescustomvision']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "body": "@triggerBody()",
+                                        "headers": {
+                                            "Content-Type": " application/octet-stream"
+                                        },
+                                        "path": "/customvision/v1.0/Prediction/@{encodeURIComponent('30d097d7-2a15-4c0c-bd0e-1ee49c0a2b75')}/image",
+                                        "queries": {
+                                            "iterationId": "310bcf04-1156-46a9-ae2d-cf2e0efc0cd3"
+                                        },
+                                        "authentication": "@parameters('$authentication')"
+                                    }
+                                },
+                                "Apply_to_each": {
+                                    "foreach": "@body('Predict_tags_from_image')?['Predictions']",
+                                    "actions": {
+                                        "Compose": {
+                                            "runAfter": {},
+                                            "type": "Compose",
+                                            "inputs": "@items('Apply_to_each')?['Tag']"
+                                        },
+                                        "Compose_2": {
+                                            "runAfter": {
+                                                "Compose": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": "@items('Apply_to_each')?['TagId']"
+                                        },
+                                        "Compose_4": {
+                                            "runAfter": {
+                                                "Compose_2": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": "@items('Apply_to_each')?['Probability']"
+                                        },
+                                        "Condition": {
+                                            "actions": {
+                                                "Set_variable": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "predictionScore",
+                                                        "value": "@items('Apply_to_each')?['Probability']"
+                                                    }
+                                                },
+                                                "Set_variable_2": {
+                                                    "runAfter": {
+                                                        "Set_variable": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "predictionTag",
+                                                        "value": "@items('Apply_to_each')?['Tag']"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Compose_4": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "expression": {
+                                                "greater": [
+                                                    "@items('Apply_to_each')?['Probability']",
+                                                    "@variables('predictionScore')"
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Predict_tags_from_image": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Condition_2": {
+                                    "actions": {
+                                        "Compose_7": {
+                                            "runAfter": {},
+                                            "type": "Compose",
+                                            "inputs": "Image Not Applicable to ID milk"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Apply_to_each": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Is_Milk_Present": {
+                                                "actions": {
+                                                    "Set_Milk_Is_Present": {
+                                                        "runAfter": {},
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "isMilkPresent",
+                                                            "value": "@true"
+                                                        }
+                                                    }
+                                                },
+                                                "runAfter": {
+                                                    "Move_or_rename_a_file": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "else": {
+                                                    "actions": {
+                                                        "Set_variable_3": {
+                                                            "runAfter": {},
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "isMilkPresent",
+                                                                "value": "@false"
+                                                            }
+                                                        },
+                                                        "Set_variable_4": {
+                                                            "runAfter": {
+                                                                "Set_variable_3": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "filContentToAdd",
+                                                                "value": "@{body('Convert_time_zone')}, false, ❌"
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "expression": {
+                                                    "equals": [
+                                                        "@variables('predictionTag')",
+                                                        "milk"
+                                                    ]
+                                                },
+                                                "type": "If"
+                                            },
+                                            "Move_or_rename_a_file": {
+                                                "runAfter": {},
+                                                "metadata": {
+                                                    "flowSystemMetadata": {
+                                                        "swaggerOperationId": "MoveFile"
+                                                    }
+                                                },
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['onedrive']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/datasets/default/files/@{encodeURIComponent(encodeURIComponent(triggerOutputs()['headers']['x-ms-file-id']))}/move",
+                                                    "queries": {
+                                                        "destination": "/House%20Management/Milk/Proof/@{variables('photoFileName')}",
+                                                        "overwrite": true
+                                                    },
+                                                    "authentication": "@parameters('$authentication')"
+                                                }
+                                            },
+                                            "Update_file": {
+                                                "runAfter": {
+                                                    "Is_Milk_Present": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "metadata": {
+                                                    "flowSystemMetadata": {
+                                                        "swaggerOperationId": "UpdateFile"
+                                                    }
+                                                },
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['onedrive']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "put",
+                                                    "body": "@{variables('fileContent')}@{uriComponentToString('%0A')}@{variables('filContentToAdd')}",
+                                                    "path": "/datasets/default/files/@{encodeURIComponent(encodeURIComponent(first(body('Find_files_in_folder_by_path'))?['Id']))}",
+                                                    "authentication": "@parameters('$authentication')"
+                                                },
+                                                "runtimeConfiguration": {
+                                                    "contentTransfer": {
+                                                        "transferMode": "Chunked"
+                                                    }
+                                                }
+                                            },
+                                            "Send_an_email": {
+                                                "runAfter": {
+                                                    "Update_file": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "metadata": {
+                                                    "flowSystemMetadata": {
+                                                        "swaggerOperationId": "SendEmail"
+                                                    }
+                                                },
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['outlook']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "body": {
+                                                        "To": "alen.alex@outlook.com",
+                                                        "Subject": "Milk value has been set to: @{variables('predictionTag')}",
+                                                        "Body": "File ID: @{triggerOutputs()['headers']['x-ms-file-id']}\nFile Path: @{base64ToString(triggerOutputs()['headers']['x-ms-file-path-encoded'])}\n\nRegards,\nMyself"
+                                                    },
+                                                    "path": "/Mail",
+                                                    "authentication": "@parameters('$authentication')"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "equals": [
+                                            "@variables('predictionTag')",
+                                            "na"
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "Condition_3": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "equals": [
+                                    "@variables('shouldProceed')",
+                                    "@true"
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Should_Proceed": {
+                            "runAfter": {
+                                "Year": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "shouldProceed",
+                                        "type": "Boolean",
+                                        "value": "@true"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_File_Content": {
+                            "runAfter": {
+                                "Should_Proceed": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "fileContent",
+                                        "type": "String"
+                                    }
+                                ]
+                            }
+                        },
+                        "Condition_3": {
+                            "actions": {
+                                "Condition_5": {
+                                    "actions": {
+                                        "Set_Should_Proceed_To_False": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "shouldProceed",
+                                                "value": "@false"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Get_file_content_using_path": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Set_File_Content": {
+                                                "runAfter": {},
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "fileContent",
+                                                    "value": "@{body('Get_file_content_using_path')}"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "contains": [
+                                            "@body('Get_file_content_using_path')",
+                                            "@variables('filContentToAdd')"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Get_file_content_using_path": {
+                                    "runAfter": {},
+                                    "metadata": {
+                                        "flowSystemMetadata": {
+                                            "swaggerOperationId": "GetFileContentByPath"
+                                        }
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['onedrive']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/datasets/default/GetFileContentByPath",
+                                        "queries": {
+                                            "path": "@{variables('filePath')}/@{variables('fileName')}",
+                                            "inferContentType": true
+                                        },
+                                        "authentication": "@parameters('$authentication')"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Compose_3": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Create_file": {
+                                        "runAfter": {},
+                                        "metadata": {
+                                            "flowSystemMetadata": {
+                                                "swaggerOperationId": "CreateFile"
+                                            }
+                                        },
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['onedrive']['connectionId']"
+                                                }
+                                            },
+                                            "method": "post",
+                                            "body": "Date, MilkReceived Status, Remarks",
+                                            "path": "/datasets/default/files",
+                                            "queries": {
+                                                "folderPath": "@variables('filePath')",
+                                                "name": "@variables('fileName')"
+                                            },
+                                            "authentication": "@parameters('$authentication')"
+                                        },
+                                        "runtimeConfiguration": {
+                                            "contentTransfer": {
+                                                "transferMode": "Chunked"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "greater": [
+                                    "@length(body('Find_files_in_folder_by_path'))",
+                                    0
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Create_placeholder_file": {
+                            "runAfter": {
+                                "Compose_6": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "metadata": {
+                                "flowSystemMetadata": {
+                                    "swaggerOperationId": "CreateFile"
+                                }
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['onedrive']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": "this is just a placeholder file. No content.",
+                                "path": "/datasets/default/files",
+                                "queries": {
+                                    "folderPath": "@variables('filePath')",
+                                    "name": "temp.txt"
+                                },
+                                "authentication": "@parameters('$authentication')"
+                            },
+                            "runtimeConfiguration": {
+                                "contentTransfer": {
+                                    "transferMode": "Chunked"
+                                }
+                            }
+                        },
+                        "Compose_3": {
+                            "runAfter": {
+                                "Find_files_in_folder_by_path": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@length(body('Find_files_in_folder_by_path'))"
+                        },
+                        "Compose_5": {
+                            "runAfter": {},
+                            "type": "Compose",
+                            "inputs": "@base64ToString(triggerOutputs()['headers']['x-ms-file-name-encoded'])"
+                        },
+                        "Find_files_in_folder_by_path": {
+                            "runAfter": {
+                                "Create_placeholder_file": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "metadata": {
+                                "flowSystemMetadata": {
+                                    "swaggerOperationId": "FindFilesByPath"
+                                }
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['onedrive']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/datasets/default/findFile",
+                                "queries": {
+                                    "query": "@variables('fileName')",
+                                    "path": "/House%20Management/Milk/Availability%20Data/@{body('Year')}",
+                                    "findMode": "Pattern",
+                                    "maxFileCount": 1
+                                },
+                                "authentication": "@parameters('$authentication')"
+                            }
+                        },
+                        "Compose_6": {
+                            "runAfter": {
+                                "Initialize_Photo_File_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@triggerOutputs()['headers']['Content-Type']"
+                        },
+                        "Initialize_Photo_File_Name": {
+                            "runAfter": {
+                                "File_Content_To_Add": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "photoFileName",
+                                        "type": "String",
+                                        "value": "@{body('Convert_time_zone')}.jpg"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "cognitiveservicescustomvision": {
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'cognitiveservicescustomvision')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('cognitiveservicescustomvision_Connection_Name'))]",
+                                "connectionName": "[parameters('cognitiveservicescustomvision_Connection_Name')]"
+                            },
+                            "onedrive": {
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'onedrive')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('onedrive_Connection_Name'))]",
+                                "connectionName": "[parameters('onedrive_Connection_Name')]"
+                            },
+                            "outlook": {
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'outlook')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('outlook_Connection_Name'))]",
+                                "connectionName": "[parameters('outlook_Connection_Name')]"
+                            }
+                        }
+                    }
+                },
+                "runtimeConfiguration": {
+                    "lifetime": {
+                        "unit": "Day",
+                        "count": 30
+                    },
+                    "collections": {
+                        "maximumItemCount": 5000
+                    },
+                    "performanceProfile": {
+                        "throttles": {
+                            "mode": "Low"
+                        }
+                    },
+                    "retryPolicy": {
+                        "type": "Exponential",
+                        "interval": "PT5M",
+                        "count": 2,
+                        "minimumInterval": "PT5M",
+                        "maximumInterval": "PT1H"
+                    },
+                    "usageConfiguration": {
+                        "name": "USER-0123456789456123"
+                    }
+                },
+                "integrationAccount": {
+                    "name": "12345678945612345678945612345678-0123456789456123-westus",
+                    "id": "subscriptions/24fa6447-0d7f-439d-9ee6-3b1984fec8b6/resourceGroups/12345678945612345678945612345678-0123456789456123/providers/Microsoft.Logic/integrationAccounts/12345678945612345678945612345678-0123456789456123-westus",
+                    "type": "Microsoft.Logic/integrationAccounts"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('cognitiveservicescustomvision_Connection_Name')]",
+            "location": "[parameters('logicAppLocation')]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'cognitiveservicescustomvision')]"
+                },
+                "displayName": "[parameters('cognitiveservicescustomvision_Connection_Name')]"
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('onedrive_Connection_Name')]",
+            "location": "[parameters('logicAppLocation')]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'onedrive')]"
+                },
+                "displayName": "[parameters('onedrive_Connection_Name')]"
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('outlook_Connection_Name')]",
+            "location": "[parameters('logicAppLocation')]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'outlook')]"
+                },
+                "displayName": "[parameters('outlook_Connection_Name')]"
+            }
+        }
+    ]
+}
