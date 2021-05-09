@@ -1,0 +1,368 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "logicAppName": {
+            "type": "String",
+            "metadata": {
+                "description": "Name of the logic app."
+            }
+        },
+        "logicAppLocation": {
+            "defaultValue": "[resourceGroup().location]",
+            "allowedValues": [
+                "eastasia",
+                "southeastasia",
+                "centralus",
+                "eastus",
+                "eastus2",
+                "westus",
+                "northcentralus",
+                "southcentralus",
+                "northeurope",
+                "westeurope",
+                "japanwest",
+                "japaneast",
+                "brazilsouth",
+                "australiaeast",
+                "australiasoutheast",
+                "southindia",
+                "centralindia",
+                "westindia",
+                "canadacentral",
+                "canadaeast",
+                "uaecentral",
+                "westcentralus",
+                "westus2",
+                "[resourceGroup().location]"
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "Location of the logic app."
+            }
+        },
+        "onedrive_Connection_Name": {
+            "defaultValue": "onedrive",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the connection."
+            }
+        },
+        "flowpush_Connection_Name": {
+            "defaultValue": "flowpush",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the connection."
+            }
+        },
+        "gmail_Connection_Name": {
+            "defaultValue": "gmail",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the connection."
+            }
+        }
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('logicAppName')]",
+            "location": "[parameters('logicAppLocation')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', parameters('onedrive_Connection_Name'))]",
+                "[resourceId('Microsoft.Web/connections', parameters('flowpush_Connection_Name'))]",
+                "[resourceId('Microsoft.Web/connections', parameters('gmail_Connection_Name'))]"
+            ],
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "$authentication": {
+                            "defaultValue": {},
+                            "type": "SecureObject"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_new_email_arrives": {
+                            "recurrence": {
+                                "frequency": "Minute",
+                                "interval": 15
+                            },
+                            "metadata": {
+                                "flowSystemMetadata": {
+                                    "swaggerOperationId": "OnNewEmail"
+                                }
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['gmail']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/Mail/OnNewEmail",
+                                "queries": {
+                                    "label": "INBOX",
+                                    "to": "<<to mail id>>",
+                                    "from": "<<from mail id>>",
+                                    "subject": "<<Some subject>>",
+                                    "importance": "All",
+                                    "starred": "All",
+                                    "fetchOnlyWithAttachments": false,
+                                    "includeAttachments": false
+                                },
+                                "authentication": "@parameters('$authentication')"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "App_Name": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "AppName",
+                                        "type": "string",
+                                        "value": "<<AppName>>"
+                                    }
+                                ]
+                            }
+                        },
+                        "Folder_Path": {
+                            "runAfter": {
+                                "App_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "FolderPath",
+                                        "type": "string",
+                                        "value": "/Documents/Finance/Bills/Shopping/"
+                                    }
+                                ]
+                            }
+                        },
+                        "Convert_time_zone": {
+                            "runAfter": {
+                                "Folder_Path": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Expression",
+                            "kind": "ConvertTimeZone",
+                            "inputs": {
+                                "baseTime": "@triggerBody()?['DateTimeReceived']",
+                                "formatString": "D",
+                                "sourceTimeZone": "UTC",
+                                "destinationTimeZone": "India Standard Time"
+                            }
+                        },
+                        "File_Name": {
+                            "runAfter": {
+                                "Convert_time_zone": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "FileName",
+                                        "type": "string",
+                                        "value": "@{body('Convert_time_zone')}.html"
+                                    }
+                                ]
+                            }
+                        },
+                        "File_Content": {
+                            "runAfter": {
+                                "File_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "FileContent",
+                                        "type": "string",
+                                        "value": "@triggerBody()?['Body']"
+                                    }
+                                ]
+                            }
+                        },
+                        "Create_file": {
+                            "runAfter": {
+                                "Append_to_string_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "metadata": {
+                                "flowSystemMetadata": {
+                                    "swaggerOperationId": "CreateFile"
+                                }
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['onedrive']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": "@variables('FileContent')",
+                                "path": "/datasets/default/files",
+                                "queries": {
+                                    "folderPath": "@variables('FolderPath')",
+                                    "name": "@variables('FileName')"
+                                },
+                                "authentication": "@parameters('$authentication')"
+                            },
+                            "runtimeConfiguration": {
+                                "contentTransfer": {
+                                    "transferMode": "Chunked"
+                                }
+                            }
+                        },
+                        "Send_me_a_mobile_notification": {
+                            "runAfter": {
+                                "Create_file": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "metadata": {
+                                "flowSystemMetadata": {
+                                    "swaggerOperationId": "SendNotification"
+                                }
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['flowpush']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": {
+                                    "notificationText": "Licious Bill Saved to OneDrive"
+                                },
+                                "path": "/sendNotification",
+                                "authentication": "@parameters('$authentication')"
+                            }
+                        },
+                        "Append_to_string_variable": {
+                            "runAfter": {
+                                "File_Content": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "AppendToStringVariable",
+                            "inputs": {
+                                "name": "FolderPath",
+                                "value": "@{formatDateTime(body('Convert_time_zone'), 'yyyy')}/@{variables('AppName')}"
+                            }
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "onedrive": {
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'onedrive')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('onedrive_Connection_Name'))]",
+                                "connectionName": "[parameters('onedrive_Connection_Name')]"
+                            },
+                            "flowpush": {
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'flowpush')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('flowpush_Connection_Name'))]",
+                                "connectionName": "[parameters('flowpush_Connection_Name')]"
+                            },
+                            "gmail": {
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'gmail')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('gmail_Connection_Name'))]",
+                                "connectionName": "[parameters('gmail_Connection_Name')]"
+                            }
+                        }
+                    }
+                },
+                "runtimeConfiguration": {
+                    "lifetime": {
+                        "unit": "Day",
+                        "count": 30
+                    },
+                    "collections": {
+                        "maximumItemCount": 5000
+                    },
+                    "performanceProfile": {
+                        "throttles": {
+                            "mode": "Low"
+                        }
+                    },
+                    "retryPolicy": {
+                        "type": "Exponential",
+                        "interval": "PT5M",
+                        "count": 2,
+                        "minimumInterval": "PT5M",
+                        "maximumInterval": "PT1H"
+                    },
+                    "usageConfiguration": {
+                        "name": "USER-0123456789456123"
+                    }
+                },
+                "integrationAccount": {
+                    "name": "12345678945612345678945612345678-0123456789456123-westus",
+                    "id": "subscriptions/24fa6447-0d7f-439d-9ee6-3b1984fec8b6/resourceGroups/12345678945612345678945612345678-0123456789456123/providers/Microsoft.Logic/integrationAccounts/12345678945612345678945612345678-0123456789456123-westus",
+                    "type": "Microsoft.Logic/integrationAccounts"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('onedrive_Connection_Name')]",
+            "location": "[parameters('logicAppLocation')]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'onedrive')]"
+                },
+                "displayName": "[parameters('onedrive_Connection_Name')]"
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('flowpush_Connection_Name')]",
+            "location": "[parameters('logicAppLocation')]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'flowpush')]"
+                },
+                "displayName": "[parameters('flowpush_Connection_Name')]"
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('gmail_Connection_Name')]",
+            "location": "[parameters('logicAppLocation')]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('logicAppLocation'), '/managedApis/', 'gmail')]"
+                },
+                "displayName": "[parameters('gmail_Connection_Name')]"
+            }
+        }
+    ]
+}
